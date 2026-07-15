@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2015 FCE 1 Test 1 U+R Split Screen</title>
+    <title>2015 FCE 1 Test 2 U+R Split Screen</title>
     <!-- Load Mozilla's PDF.js library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
@@ -155,7 +155,27 @@
             -webkit-overflow-scrolling: touch;
         }
 
-        .pdf-transform-container.pinching {
+        /* Two-Page Spread Viewport Layout Mode */
+        .pdf-transform-container.two-page-view {
+            display: grid;
+            grid-template-columns: repeat(2, max-content);
+            justify-content: center; /* centers the pair as a whole, doesn't stretch columns */
+            align-items: start;
+            gap: 0; /* no gap at any zoom level; page-wrapper box-shadow gives a subtle seam */
+        }
+
+        /* When the centered pair is wider than the viewport (zoomed in),
+           centering pushes the left edge into negative scroll territory,
+           which the browser can't scroll back to - that content becomes
+           permanently unreachable. Switch to left alignment whenever it
+           overflows so scrollLeft:0 is always the true left edge. This
+           class is toggled in JS based on measured scrollWidth. */
+        .pdf-transform-container.two-page-view.overflowing-x {
+            justify-content: flex-start;
+        }
+
+        .pdf-transform-container.pinching,
+        .pdf-transform-container.wheel-zooming {
             overflow: hidden;
         }
 
@@ -178,10 +198,56 @@
             left: 0;
             z-index: 2;
             opacity: 0.5;
+            pointer-events: auto; /* Ensure active mouse events */
         }
         
         .annotation-canvas.pen-mode { cursor: crosshair; }
         .annotation-canvas.eraser-mode { cursor: pointer; }
+        .annotation-canvas.text-mode { cursor: text; }
+
+        /* Inline editor shown while typing a new text annotation */
+        .text-annotation-editor {
+            position: absolute;
+            z-index: 5;
+            min-width: 90px;
+            min-height: 30px;
+            padding: 3px 5px;
+            border: 1px dashed #007bff;
+            background: rgba(255,255,255,0.88);
+            font-family: system-ui, -apple-system, sans-serif;
+            line-height: 1.25;
+            resize: both;
+            overflow: auto;
+            box-sizing: border-box;
+        }
+
+        /* --- HELP / INSTRUCTIONS MODAL --- */
+        #help-modal { z-index: 3000; } /* above the timer gates */
+        .help-card { max-width: 560px; max-height: 82vh; overflow-y: auto; text-align: left; position: relative; }
+        .help-close-btn {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 24px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+        .help-close-btn:hover { color: #fff; }
+        .help-lang-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        .help-lang-tabs .tool-btn { flex: 1; }
+        .help-content h3 { color: #f8f9fa; margin: 16px 0 6px; font-size: 15px; }
+        .help-content h3:first-child { margin-top: 0; }
+        .help-content p, .help-content li { color: #c9c9c9; font-size: 13.5px; line-height: 1.6; }
+        .help-content ul { margin: 4px 0 10px 20px; }
+        .help-content strong { color: #fff; }
 
         .dragging-active iframe {
             pointer-events: none;
@@ -258,7 +324,7 @@
         
         <!-- LEFT PANEL: Google Form -->
         <div class="split left-side" id="left-panel">
-            <iframe src="https://docs.google.com/forms/d/e/1FAIpQLSc_ucH7zf5AQ3J4bfP2thNjO06bPlhBciNCedu7uVK3QO1s3A/viewform?embedded=true">Loading…</iframe>
+            <iframe src="https://docs.google.com/forms/d/e/1FAIpQLSe4VarXc5dI2AxkjVK9px-A6YUIpMNuivKiVVjmQxgVnjID1w/viewform?embedded=true" width="640" height="13825" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>
         </div>
 
         <!-- MIDDLE RESIZER -->
@@ -286,34 +352,112 @@
                     <p style="color: #e6b8ba;">Your time window to look at this reading material has finished. Please focus completely on submitting your form on the left pane.</p>
                 </div>
             </div>
+
+            <!-- HELP / INSTRUCTIONS MODAL -->
+            <div id="help-modal" class="pdf-gate-overlay" style="display: none;">
+                <div class="gate-card help-card">
+                    <button id="btn-help-close" class="help-close-btn" aria-label="Close">&times;</button>
+                    <h2>📖 How to Use / Hướng Dẫn Sử Dụng</h2>
+                    <div class="help-lang-tabs">
+                        <button id="btn-lang-en" class="tool-btn active">English</button>
+                        <button id="btn-lang-vi" class="tool-btn">Tiếng Việt</button>
+                    </div>
+
+                    <div id="help-content-en" class="help-content">
+                        <h3>✏️ Pen</h3>
+                        <p>Tap Pen to turn on drawing. Draw directly on the page with your mouse or finger. Choose a color and line size from the toolbar.</p>
+                        <h3>🧽 Rubber (Eraser)</h3>
+                        <p>Tap Rubber, then drag over any ink or text you want to remove. The "Size" slider also controls how big the eraser touch area is.</p>
+                        <h3>🔤 Text</h3>
+                        <p>Tap Text, then tap anywhere on the page to place a text box. Type your note and tap elsewhere (or press Escape to cancel) to save it. Pick the font size and color from the toolbar before placing text.</p>
+                        <h3>📖 2-Page View</h3>
+                        <p>Toggle this to view two pages side-by-side, like a real exam booklet, instead of scrolling one page at a time.</p>
+                        <h3>🔍 Zoom In / Out</h3>
+                        <ul>
+                            <li><strong>Phone/tablet:</strong> pinch with two fingers to zoom, anchored right where you pinch.</li>
+                            <li><strong>Computer:</strong> hold Ctrl and scroll your mouse wheel over the page.</li>
+                            <li><strong>Type it:</strong> tap the Zoom percentage number in the toolbar and type an exact value.</li>
+                        </ul>
+                        <h3>↔️ Resize the Panels</h3>
+                        <p>Drag the gray bar between the form (left) and the PDF (right) to resize either side.</p>
+                        <h3>📺 Fullscreen</h3>
+                        <p>Expands the whole page to fill your screen, hiding browser bars for a distraction-free view.</p>
+                        <h3>⏱️ Timer Lock</h3>
+                        <p>When the PDF viewer first loads, you can choose a timed reading session (the file disappears when time is up) or open it with no timer.</p>
+                    </div>
+
+                    <div id="help-content-vi" class="help-content" style="display: none;">
+                        <h3>✏️ Bút Vẽ</h3>
+                        <p>Chạm vào Pen để bật chế độ vẽ. Vẽ trực tiếp lên trang bằng chuột hoặc ngón tay. Chọn màu và độ dày nét vẽ trên thanh công cụ.</p>
+                        <h3>🧽 Tẩy</h3>
+                        <p>Chạm vào Rubber, sau đó kéo qua nét vẽ hoặc chữ muốn xóa. Thanh trượt "Size" cũng điều chỉnh kích thước vùng tẩy.</p>
+                        <h3>🔤 Hộp Văn Bản</h3>
+                        <p>Chạm vào Text, sau đó chạm vào bất kỳ vị trí nào trên trang để đặt hộp văn bản. Gõ ghi chú rồi chạm ra chỗ khác (hoặc nhấn Escape để hủy) để lưu lại. Chọn cỡ chữ và màu chữ trên thanh công cụ trước khi đặt văn bản.</p>
+                        <h3>📖 Xem 2 Trang</h3>
+                        <p>Bật chế độ này để xem hai trang cạnh nhau như một cuốn đề thi thật, thay vì cuộn từng trang một.</p>
+                        <h3>🔍 Phóng To / Thu Nhỏ</h3>
+                        <ul>
+                            <li><strong>Điện thoại/máy tính bảng:</strong> chụm hai ngón tay để phóng to/thu nhỏ, đúng ngay vị trí bạn chụm.</li>
+                            <li><strong>Máy tính:</strong> giữ phím Ctrl và cuộn chuột trên trang.</li>
+                            <li><strong>Nhập số:</strong> chạm vào số phần trăm Zoom trên thanh công cụ và nhập giá trị chính xác.</li>
+                        </ul>
+                        <h3>↔️ Thay Đổi Kích Thước Khung</h3>
+                        <p>Kéo thanh màu xám ở giữa để thay đổi kích thước khung form (bên trái) và khung PDF (bên phải).</p>
+                        <h3>📺 Toàn Màn Hình</h3>
+                        <p>Mở rộng trang để lấp đầy màn hình, ẩn thanh trình duyệt để xem không bị phân tâm.</p>
+                        <h3>⏱️ Khóa Hẹn Giờ</h3>
+                        <p>Khi trình xem PDF tải lần đầu, bạn có thể chọn phiên đọc có hẹn giờ (tệp sẽ biến mất khi hết giờ) hoặc mở không cần hẹn giờ.</p>
+                    </div>
+                </div>
+            </div>
             
             <div class="toolbar">
                 <button id="btn-pen" class="tool-btn active">✏️ Pen</button>
                 <button id="btn-eraser" class="tool-btn">🧽 Rubber</button>
+                <button id="btn-text" class="tool-btn">🔤 Text</button>
+                <button id="btn-two-page" class="tool-btn">📖 2-Page</button>
 
                 <div class="control-group" id="color-group">
                     <label for="color">Color:</label>
                     <input type="color" id="color" value="#ff0000">
                 </div>
-                <div class="control-group">
+                <div class="control-group" id="thickness-group">
                     <label for="thickness">Size:</label>
                     <input type="range" id="thickness" min="1" max="20" value="3" style="width: 50px;">
+                </div>
+                <div class="control-group" id="fontsize-group" style="opacity: 0.3;">
+                    <label for="font-size">Font:</label>
+                    <select id="font-size">
+                        <option value="12">12</option>
+                        <option value="14">14</option>
+                        <option value="16" selected>16</option>
+                        <option value="18">18</option>
+                        <option value="20">20</option>
+                        <option value="24">24</option>
+                        <option value="28">28</option>
+                        <option value="32">32</option>
+                        <option value="40">40</option>
+                    </select>
                 </div>
                 <div class="control-group" id="opacity-group">
                     <label for="opacity">Opacity:</label>
                     <input type="range" id="opacity" min="0.1" max="1" step="0.1" value="0.5" style="width: 50px;">
                     <span id="opacity-val">50%</span>
                 </div>
-                <span id="zoom-display" style="font-size: 12px; font-weight: bold; color: #007bff;">Zoom: 100%</span>
+                <span class="control-group" style="font-size: 12px; font-weight: bold; color: #007bff;">
+                    Zoom:
+                    <input type="number" id="zoom-input" value="100" style="width: 52px; font-size: 12px; font-weight: bold; color: #007bff; border: 1px solid #ccc; border-radius: 4px; padding: 3px 4px;">%
+                </span>
                 
                 <!-- Live Display Ticker -->
                 <div id="timer-ticker" class="timer-display">00:30</div>
 
+                <button id="btn-help" class="tool-btn">❓ Help</button>
                 <button id="btn-fullscreen" class="tool-btn fullscreen-btn">📺 Fullscreen</button>
             </div>
 
             <!-- Viewport Structure for Fluid Transforming -->
-            <div class="pdf-viewport">
+            <div class="pdf-viewport" id="pdf-viewport">
                 <div class="pdf-transform-container" id="pdf-transform-layer">
                     <div id="loading-text">Loading exam paper structure...</div>
                 </div>
@@ -325,14 +469,13 @@
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
 
-        const pdfUrl = '2015FCE1-1UR.pdf';
+        const pdfUrl = '2007KET1T1RW.pdf';
 
         // --- GLOBAL TIME CONFIGURATION CONSTANT ---
-        // Edit this value (in seconds) to adjust test length. 
-        // e.g., 60 for 1 minute, 600 for 10 minutes, 1800 for 30 minutes.
-        const TEST_DURATION_SECONDS = 30; 
+        const TEST_DURATION_SECONDS = 4200; 
 
         const transformLayer = document.getElementById('pdf-transform-layer');
+        const pdfViewport = document.getElementById('pdf-viewport');
         const leftPanel = document.getElementById('left-panel');
         const rightPanel = document.getElementById('right-panel');
         const dragBar = document.getElementById('drag-bar');
@@ -342,15 +485,30 @@
         const thicknessInput = document.getElementById('thickness');
         const opacityInput = document.getElementById('opacity');
         const opacityVal = document.getElementById('opacity-val');
-        const zoomDisplay = document.getElementById('zoom-display');
+        const zoomInput = document.getElementById('zoom-input');
+        const fontSizeInput = document.getElementById('font-size');
 
         const btnPen = document.getElementById('btn-pen');
         const btnEraser = document.getElementById('btn-eraser');
+        const btnText = document.getElementById('btn-text');
+        const btnTwoPage = document.getElementById('btn-two-page');
         const btnFullscreen = document.getElementById('btn-fullscreen');
+        
         const colorGroup = document.getElementById('color-group');
+        const thicknessGroup = document.getElementById('thickness-group');
         const opacityGroup = document.getElementById('opacity-group');
+        const fontSizeGroup = document.getElementById('fontsize-group');
 
-        // Timer related element hookups
+        // Help modal elements
+        const btnHelp = document.getElementById('btn-help');
+        const helpModal = document.getElementById('help-modal');
+        const btnHelpClose = document.getElementById('btn-help-close');
+        const btnLangEn = document.getElementById('btn-lang-en');
+        const btnLangVi = document.getElementById('btn-lang-vi');
+        const helpContentEn = document.getElementById('help-content-en');
+        const helpContentVi = document.getElementById('help-content-vi');
+
+        // Timer elements
         const timerGate = document.getElementById('timer-gate');
         const timeoutGate = document.getElementById('timeout-gate');
         const timerTicker = document.getElementById('timer-ticker');
@@ -368,16 +526,19 @@
         
         let drawingHistory = {}; 
         let currentMode = 'pen';
+        let isTwoPageMode = false;
 
         let baseTransformScale = 1.0; 
         let currentTransformScale = 1.0;
         let startTouchDistance = 0;
         let activeRenderTasks = [];
         let renderTimeout = null;
+        let renderGenerationCounter = 0; // guards against a stale, superseded render swapping in after a newer one already landed
+        let activeTextEditor = null; // the in-progress <textarea> overlay, if any
         
         let examTimerInterval = null;
 
-        // Dynamic Text Sync with user settings
+        // Dynamic Text Sync
         function syncUIWithConfigTime() {
             btnStartTimer.textContent = `⏱️ Use ${formatSecondsToLabel(TEST_DURATION_SECONDS)} Timer`;
             updateTickerUI(TEST_DURATION_SECONDS);
@@ -389,9 +550,9 @@
             return `${mins}-Minute`;
         }
 
-        // --- TIMER INFRASTRUCTURE CONTROLLER ---
+        // --- TIMER INFRASTRUCTURE ---
         btnSkipTimer.addEventListener('click', () => {
-            timerGate.style.display = 'none'; // Safely lift blocker layout
+            timerGate.style.display = 'none'; 
         });
 
         btnStartTimer.addEventListener('click', () => {
@@ -424,28 +585,64 @@
 
         function executeSecureTimeout() {
             cancelActiveRenders();
-            
-            // Hard clean up PDF references to block code inspectors
+            renderGenerationCounter++; // invalidate any in-flight render so it can't repopulate content after this
+            discardOpenTextEditor(); // session's closing - don't save a half-typed note into a tree we're about to wipe
             transformLayer.innerHTML = '<div style="color:#aaa; padding:20px; text-align:center;">Session Closed.</div>';
             pdfDoc = null; 
             drawingHistory = {};
 
-            // Display lockdown overlay panel
             timeoutGate.style.display = "flex";
             timerTicker.style.background = "#6c757d";
         }
-        // --- END TIMER INFRASTRUCTURE ---
 
-        function calculateSafeSharpness(viewportWidth) {
+        // --- SHARPNESS CALCULATION ---
+        // --- SHARPNESS / CRASH-SAFETY CALCULATION ---
+        // Every page in the document is rendered concurrently (not just the
+        // visible one), and each page allocates TWO canvas backing stores
+        // (the PDF raster + the annotation layer). At high zoom, uncapped
+        // canvas pixel dimensions are what actually crash mobile Safari/
+        // Chrome - not the CSS display size. This function enforces:
+        //   1) a hard per-dimension ceiling (protects against one huge page)
+        //   2) a total pixel-area budget shared across ALL pages in the doc,
+        //      so a long document doesn't multiply memory use unbounded
+        //   3) a tighter budget in two-page mode, where two pages' worth of
+        //      canvases are live at once and users tend to zoom in further
+        function calculateSafeSharpness(viewportWidth, viewportHeight) {
             let devicePR = window.devicePixelRatio || 1;
-            let targetSF = Math.max(devicePR, 2.0);
-            
-            if (viewportWidth * targetSF > 3000) {
-                targetSF = 3000 / viewportWidth;
+            let targetSF = Math.max(devicePR * 1.15, 2.2);
+
+            const MAX_DIM = isTwoPageMode ? 2048 : 3200;
+            if (viewportWidth * targetSF > MAX_DIM) {
+                targetSF = MAX_DIM / viewportWidth;
             }
-            return Math.max(targetSF, 1.0);
+            if (viewportHeight * targetSF > MAX_DIM) {
+                targetSF = Math.min(targetSF, MAX_DIM / viewportHeight);
+            }
+
+            // Shared area budget, divided across every page in the document
+            // (x2 to roughly account for the PDF canvas + annotation canvas
+            // that both get allocated per page).
+            const totalPages = (pdfDoc && pdfDoc.numPages) ? pdfDoc.numPages : 1;
+            const TOTAL_CANVAS_BUDGET = isTwoPageMode ? 70000000 : 110000000;
+            const perPageBudget = TOTAL_CANVAS_BUDGET / totalPages;
+            const area = viewportWidth * viewportHeight * targetSF * targetSF * 2;
+            if (area > perPageBudget) {
+                targetSF *= Math.sqrt(perPageBudget / area);
+            }
+
+            // Crash-safety wins over sharpness only at extreme zoom/page-count
+            // combinations; this floor keeps things from ever going illegibly soft.
+            return Math.max(targetSF, 0.6);
         }
 
+        // Extra guardrail: cap how far the user can zoom while in two-page
+        // mode, since that's the highest-memory-pressure combination (two
+        // pages' worth of canvases live simultaneously).
+        function getEffectiveMaxScale() {
+            return isTwoPageMode ? 2.5 : MAX_SCALE;
+        }
+
+        // --- TOOLBAR SELECTION MANAGER ---
         btnPen.addEventListener('click', () => {
             if (currentMode === 'pen') setEngineMode('view');
             else setEngineMode('pen');
@@ -456,36 +653,75 @@
             else setEngineMode('eraser');
         });
 
+        btnText.addEventListener('click', () => {
+            if (currentMode === 'text') setEngineMode('view');
+            else setEngineMode('text');
+        });
+
+        btnTwoPage.addEventListener('click', () => {
+            isTwoPageMode = !isTwoPageMode;
+            if (isTwoPageMode) {
+                btnTwoPage.classList.add('active');
+                transformLayer.classList.add('two-page-view');
+                // Re-clamp: a zoom level that was safe in single-page mode
+                // may exceed the two-page-safe ceiling.
+                currentScale = Math.min(currentScale, getEffectiveMaxScale());
+            } else {
+                btnTwoPage.classList.remove('active');
+                transformLayer.classList.remove('two-page-view');
+            }
+            renderAllPages();
+        });
+
         function setEngineMode(mode) {
+            // Switching tools mid-edit should save whatever's been typed so far.
+            commitOpenTextEditor();
+
             currentMode = mode;
             const canvases = document.querySelectorAll('.annotation-canvas');
             
+            btnPen.classList.remove('active');
+            btnEraser.classList.remove('active');
+            btnText.classList.remove('active');
+
             if (mode === 'pen') {
                 btnPen.classList.add('active');
-                btnEraser.classList.remove('active');
                 colorGroup.style.opacity = "1";
                 opacityGroup.style.opacity = "1";
+                thicknessGroup.style.opacity = "1";
+                fontSizeGroup.style.opacity = "0.3";
                 canvases.forEach(c => {
                     c.className = 'annotation-canvas pen-mode';
-                    c.style.touchAction = 'none';
+                    c.style.pointerEvents = 'auto';
                 });
             } else if (mode === 'eraser') {
                 btnEraser.classList.add('active');
-                btnPen.classList.remove('active');
                 colorGroup.style.opacity = "0.3"; 
                 opacityGroup.style.opacity = "0.3";
+                thicknessGroup.style.opacity = "1";
+                fontSizeGroup.style.opacity = "0.3";
                 canvases.forEach(c => {
                     c.className = 'annotation-canvas eraser-mode';
-                    c.style.touchAction = 'none';
+                    c.style.pointerEvents = 'auto';
+                });
+            } else if (mode === 'text') {
+                btnText.classList.add('active');
+                colorGroup.style.opacity = "1";
+                opacityGroup.style.opacity = "1";
+                thicknessGroup.style.opacity = "0.3";
+                fontSizeGroup.style.opacity = "1";
+                canvases.forEach(c => {
+                    c.className = 'annotation-canvas text-mode';
+                    c.style.pointerEvents = 'auto';
                 });
             } else {
-                btnPen.classList.remove('active');
-                btnEraser.classList.remove('active');
                 colorGroup.style.opacity = "0.3"; 
                 opacityGroup.style.opacity = "0.3";
+                thicknessGroup.style.opacity = "0.3";
+                fontSizeGroup.style.opacity = "0.3";
                 canvases.forEach(c => {
                     c.className = 'annotation-canvas';
-                    c.style.touchAction = 'pan-y pan-x';
+                    c.style.pointerEvents = 'none'; 
                 });
             }
         }
@@ -528,37 +764,93 @@
             activeRenderTasks = [];
         }
 
-        function renderAllPages() {
+        function renderAllPages(scrollOverride) {
             if (!pdfDoc) return; 
+            commitOpenTextEditor(); // flush any pending text edit before the DOM underneath it gets rebuilt
             cancelActiveRenders();
             
-            const preservedScrollTop = transformLayer.scrollTop;
-            const preservedScrollLeft = transformLayer.scrollLeft;
-            transformLayer.innerHTML = '';
-            
-            transformLayer.style.transform = `scale(1)`;
-            baseTransformScale = 1.0;
-            currentTransformScale = 1.0;
+            // Normally we just keep whatever raw scroll offset was already
+            // there (fine for things like toggling opacity or two-page mode).
+            // But after a zoom, the anchor-preserving logic below computes
+            // where the scroll needs to land in the NEW (post-zoom) layout
+            // so the pinch/cursor point doesn't move on screen - a raw old
+            // offset would be measured in the OLD layout's pixel space and
+            // land in the wrong spot once pages resize.
+            const preservedScrollTop = scrollOverride ? scrollOverride.top : transformLayer.scrollTop;
+            const preservedScrollLeft = scrollOverride ? scrollOverride.left : transformLayer.scrollLeft;
 
+            const pageRenderPromises = [];
             for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
                 if (!drawingHistory[pageNum]) drawingHistory[pageNum] = [];
-                renderPage(pageNum);
+                pageRenderPromises.push(renderPage(pageNum));
             }
-            zoomDisplay.textContent = `Zoom: ${Math.round(currentScale * 100)}%`;
-            transformLayer.scrollTop = preservedScrollTop;
-            transformLayer.scrollLeft = preservedScrollLeft;
+
+            const renderGeneration = ++renderGenerationCounter;
+
+            // renderPage() now builds each page fully - including the actual
+            // PDF pixels - WITHOUT touching the live DOM. The old pages (and
+            // any live CSS-transform zoom preview) stay exactly as they were
+            // right up until every new page is ready, then everything swaps
+            // in a single synchronous step below. Previously the old content
+            // was wiped immediately and pages popped in one-by-one as they
+            // individually finished loading, with the zoom transform reset
+            // to 1 at the same instant - that combination is what looked
+            // like the view "zooming up/down and disappearing".
+            Promise.all(pageRenderPromises).then(wrappers => {
+                // Drop this result if the session closed, or a newer zoom/
+                // render already started (and will finish) after this one.
+                if (!pdfDoc || renderGeneration !== renderGenerationCounter) return;
+
+                transformLayer.innerHTML = '';
+                wrappers.forEach(w => { if (w) transformLayer.appendChild(w); });
+
+                transformLayer.classList.remove('pinching', 'wheel-zooming');
+                transformLayer.style.transform = 'scale(1)';
+                transformLayer.style.transformOrigin = '0 0';
+                baseTransformScale = 1.0;
+                currentTransformScale = 1.0;
+
+                zoomInput.value = Math.round(currentScale * 100);
+
+                // Must happen BEFORE reading/setting scroll: switching
+                // alignment shifts every page's on-screen position, so this
+                // has to settle first or the scroll value below would be
+                // computed for a layout that's about to move.
+                updateTwoPageOverflowAlignment();
+                transformLayer.scrollTop = Math.max(0, preservedScrollTop);
+                transformLayer.scrollLeft = Math.max(0, preservedScrollLeft);
+            });
         }
 
+        // When the two-page spread is wider than the viewport (zoomed in),
+        // centering (justify-content: center) pushes the left edge into
+        // negative scroll territory that the browser can never scroll back
+        // to - permanently stranding it off-screen. Switching to left
+        // alignment whenever it overflows keeps scrollLeft:0 as the true
+        // left edge, so the full width stays reachable at any zoom level.
+        function updateTwoPageOverflowAlignment() {
+            if (isTwoPageMode && transformLayer.scrollWidth > transformLayer.clientWidth + 1) {
+                transformLayer.classList.add('overflowing-x');
+            } else {
+                transformLayer.classList.remove('overflowing-x');
+            }
+        }
+
+        // Builds one page (wrapper + PDF canvas + annotation canvas, fully
+        // rendered) and resolves with the finished wrapper element WITHOUT
+        // appending it anywhere - renderAllPages() appends all pages at once
+        // only once every page in the batch is ready, for a flash-free swap.
         function renderPage(pageNum) {
-            if (!pdfDoc) return;
-            pdfDoc.getPage(pageNum).then(page => {
+            if (!pdfDoc) return Promise.resolve(null);
+            return pdfDoc.getPage(pageNum).then(page => {
                 const viewport = page.getViewport({ scale: currentScale });
-                const currentSF = calculateSafeSharpness(viewport.width);
+                const currentSF = calculateSafeSharpness(viewport.width, viewport.height);
 
                 const wrapper = document.createElement('div');
                 wrapper.className = 'page-wrapper';
                 wrapper.style.width = viewport.width + 'px';
                 wrapper.style.height = viewport.height + 'px';
+                wrapper.dataset.page = pageNum;
 
                 const pdfCanvas = document.createElement('canvas');
                 pdfCanvas.className = 'pdf-page-canvas';
@@ -576,56 +868,172 @@
                 drawingCanvas.height = viewport.height * currentSF;
                 drawingCanvas.style.width = viewport.width + 'px';
                 drawingCanvas.style.height = viewport.height + 'px';
-                drawingCanvas.style.touchAction = currentMode === 'view' ? 'pan-y pan-x' : 'none';
+                // Store the sharpness factor directly so we never have to
+                // re-derive it from DOM measurements (getComputedStyle/parseFloat)
+                // on every draw/erase event later.
+                drawingCanvas.dataset.sf = currentSF;
+                
+                drawingCanvas.style.pointerEvents = currentMode === 'view' ? 'none' : 'auto';
                 
                 wrapper.appendChild(pdfCanvas);
                 wrapper.appendChild(drawingCanvas);
-                transformLayer.appendChild(wrapper);
+
+                // These don't depend on the PDF pixels being painted yet,
+                // so they can happen immediately rather than waiting.
+                redrawPageAnnotations(pageNum, drawingCanvas, currentSF);
+                setupDrawingEvents(pageNum, drawingCanvas);
 
                 const renderTask = page.render({ canvasContext: pdfContext, viewport: viewport });
                 activeRenderTasks.push(renderTask);
 
-                renderTask.promise.then(() => {
-                    redrawPageAnnotations(pageNum, drawingCanvas, currentSF);
-                    setupDrawingEvents(pageNum, drawingCanvas);
-                }).catch(err => {
-                    if (err.name !== 'RenderingCancelledException') {
-                        console.error(err);
-                    }
-                });
+                return renderTask.promise
+                    .catch(err => {
+                        if (err.name !== 'RenderingCancelledException') {
+                            console.error(err);
+                        }
+                    })
+                    .then(() => wrapper); // resolve with the (now fully painted) wrapper either way
             });
         }
 
         function redrawPageAnnotations(pageNum, canvas, calculatedSF) {
             if (!pdfDoc) return;
             const ctx = canvas.getContext('2d');
-            const currentSF = calculatedSF || calculateSafeSharpness(canvas.width / (window.devicePixelRatio || 2));
+            const currentSF = calculatedSF || parseFloat(canvas.dataset.sf) || 1;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             canvas.style.opacity = opacityInput.value;
 
             const pageHistory = drawingHistory[pageNum] || [];
-            pageHistory.forEach(stroke => {
-                if (stroke.points.length < 1) return;
-                ctx.beginPath();
-                ctx.moveTo(stroke.points[0].x * canvas.width, stroke.points[0].y * canvas.height);
-
-                for(let i = 1; i < stroke.points.length; i++) {
-                    ctx.lineTo(stroke.points[i].x * canvas.width, stroke.points[i].y * canvas.height);
+            pageHistory.forEach(item => {
+                if (item.type === 'text') {
+                    drawTextItem(ctx, canvas, item, currentSF);
+                    return;
                 }
-                ctx.lineWidth = stroke.thickness * currentSF * (currentScale / 1.3);
-                ctx.strokeStyle = stroke.color;
+                if (!item.points || item.points.length < 1) return;
+                ctx.beginPath();
+                ctx.moveTo(item.points[0].x * canvas.width, item.points[0].y * canvas.height);
+
+                for(let i = 1; i < item.points.length; i++) {
+                    ctx.lineTo(item.points[i].x * canvas.width, item.points[i].y * canvas.height);
+                }
+                ctx.lineWidth = item.thickness * currentSF * (currentScale / 1.3);
+                ctx.strokeStyle = item.color;
                 ctx.stroke();
             });
         }
 
+        // Renders one text annotation onto the canvas. fontSize is stored
+        // relative to a 1.3 baseline scale (matching how stroke.thickness is
+        // stored) so text grows/shrinks proportionally with the page across
+        // zoom changes, the same way ink strokes do.
+        function drawTextItem(ctx, canvas, item, currentSF) {
+            const fontPx = item.fontSize * currentSF * (currentScale / 1.3);
+            ctx.font = `${fontPx}px system-ui, -apple-system, sans-serif`;
+            ctx.fillStyle = item.color;
+            ctx.textBaseline = 'top';
+            const lineHeight = fontPx * 1.25;
+            const startX = item.x * canvas.width;
+            const startY = item.y * canvas.height;
+            item.text.split('\n').forEach((line, idx) => {
+                ctx.fillText(line, startX, startY + idx * lineHeight);
+            });
+        }
+
+        // --- TEXT ANNOTATION EDITING ---
+        // A text box is placed by showing a real, editable <textarea>
+        // positioned over the page; once the user clicks away (or presses
+        // Escape to cancel), the typed text gets baked onto the annotation
+        // canvas as a permanent item, same as an ink stroke.
+        function openTextEditor(pageNum, canvas, rawX, rawY) {
+            commitOpenTextEditor(); // only one editor open at a time
+
+            const wrapper = canvas.parentElement;
+            const editor = document.createElement('textarea');
+            editor.className = 'text-annotation-editor';
+            editor.style.left = rawX + 'px';
+            editor.style.top = rawY + 'px';
+            editor.style.color = colorInput.value;
+            // The picker's value is a reference size at a 1.3 baseline scale
+            // (same convention as ink thickness), not a literal fixed pixel
+            // size - so it shrinks/grows with zoom just like the page does.
+            // Without this, a "12" selection looked oversized on mobile's
+            // smaller default zoom (0.9) since it stayed a fixed 12 real
+            // pixels regardless of how small the page itself was rendering.
+            editor.style.fontSize = (parseFloat(fontSizeInput.value) * (currentScale / 1.3)) + 'px';
+            editor.spellcheck = false;
+            wrapper.appendChild(editor);
+
+            activeTextEditor = { editor, pageNum, canvas, rawX, rawY };
+            editor.focus();
+
+            editor.addEventListener('blur', commitOpenTextEditor);
+            editor.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    discardOpenTextEditor();
+                }
+            });
+        }
+
+        function commitOpenTextEditor() {
+            if (!activeTextEditor) return;
+            const { editor, pageNum, canvas, rawX, rawY } = activeTextEditor;
+            const text = editor.value.trim();
+            activeTextEditor = null; // clear first so the blur listener below can't recurse
+            editor.remove();
+
+            if (!text) return; // nothing typed - discard silently
+
+            const currentSF = parseFloat(canvas.dataset.sf) || 1;
+            const normX = rawX / parseFloat(canvas.style.width);
+            const normY = rawY / parseFloat(canvas.style.height);
+
+            if (!drawingHistory[pageNum]) drawingHistory[pageNum] = [];
+            drawingHistory[pageNum].push({
+                type: 'text',
+                x: normX,
+                y: normY,
+                text: text,
+                color: colorInput.value,
+                // Stored as the raw 1.3-baseline reference size - drawTextItem
+                // re-applies (currentScale/1.3) at render time, the same
+                // factor already used for the live editor above, so the
+                // baked text matches what was just typed and continues to
+                // scale proportionally with any future zoom change.
+                fontSize: parseFloat(fontSizeInput.value)
+            });
+
+            redrawPageAnnotations(pageNum, canvas, currentSF);
+        }
+
+        function discardOpenTextEditor() {
+            if (!activeTextEditor) return;
+            const { editor } = activeTextEditor;
+            activeTextEditor = null;
+            editor.remove();
+        }
+
         function setupDrawingEvents(pageNum, canvas) {
-            const ctx = canvas.getContext('2d');
+            // desynchronized hint reduces input latency for pen/touch input
+            // where supported by the browser.
+            const ctx = canvas.getContext('2d', { desynchronized: true });
             let currentStrokePoints = [];
 
+            // Cache the bounding rect for the duration of a stroke instead of
+            // calling getBoundingClientRect() on every single mousemove/touchmove -
+            // that call forces a layout read and was previously happening on
+            // every pointer event.
+            let cachedRect = null;
+
+            // RAF-throttled erase redraw: multiple erase hits within the same
+            // frame get coalesced into a single redraw instead of redrawing
+            // the whole stroke history synchronously per pointer event.
+            let eraseRedrawScheduled = false;
+
             function getCoordinates(e) {
-                const rect = canvas.getBoundingClientRect();
+                const rect = cachedRect || (cachedRect = canvas.getBoundingClientRect());
                 let clientX, clientY;
                 if (e.touches && e.touches.length > 0) {
                     clientX = e.touches[0].clientX;
@@ -637,22 +1045,43 @@
                 
                 return {
                     x: ((clientX - rect.left) / (rect.width / canvas.width)),
-                    y: ((clientY - rect.top) / (rect.height / canvas.height))
+                    y: ((clientY - rect.top) / (rect.height / canvas.height)),
+                    rawX: (clientX - rect.left),
+                    rawY: (clientY - rect.top)
                 };
+            }
+
+            function scheduleEraseRedraw(currentSF) {
+                if (eraseRedrawScheduled) return;
+                eraseRedrawScheduled = true;
+                requestAnimationFrame(() => {
+                    redrawPageAnnotations(pageNum, canvas, currentSF);
+                    eraseRedrawScheduled = false;
+                });
             }
 
             function checkErase(x, y) {
                 const normX = x / canvas.width;
                 const normY = y / canvas.height;
-                const currentSF = canvas.width / parseFloat(canvas.style.width);
+                const currentSF = parseFloat(canvas.dataset.sf) || 1;
                 const eraseRadius = (thicknessInput.value * currentSF / canvas.width) * 4.0; 
                 let pageHistory = drawingHistory[pageNum] || [];
                 let modified = false;
 
                 for (let i = pageHistory.length - 1; i >= 0; i--) {
-                    const stroke = pageHistory[i];
-                    for (let p = 0; p < stroke.points.length; p++) {
-                        if (Math.sqrt((stroke.points[p].x - normX)**2 + (stroke.points[p].y - normY)**2) < eraseRadius) {
+                    const item = pageHistory[i];
+                    if (item.type === 'text') {
+                        // Text boxes are a bigger target than a single ink
+                        // point, so use a more generous hit radius.
+                        if (Math.sqrt((item.x - normX)**2 + (item.y - normY)**2) < eraseRadius * 3) {
+                            pageHistory.splice(i, 1);
+                            modified = true;
+                        }
+                        continue;
+                    }
+                    if (!item.points) continue;
+                    for (let p = 0; p < item.points.length; p++) {
+                        if (Math.sqrt((item.points[p].x - normX)**2 + (item.points[p].y - normY)**2) < eraseRadius) {
                             pageHistory.splice(i, 1); 
                             modified = true;
                             break;
@@ -661,7 +1090,7 @@
                 }
                 if (modified) {
                     drawingHistory[pageNum] = pageHistory;
-                    redrawPageAnnotations(pageNum, canvas, currentSF);
+                    scheduleEraseRedraw(currentSF);
                 }
             }
 
@@ -670,8 +1099,28 @@
                     isDrawing = false;
                     return;
                 }
-                isDrawing = true;
+
+                // Refresh the cached rect at the start of every new stroke so
+                // any layout changes between strokes (resize, panel drag)
+                // are picked up, while avoiding repeated reads mid-stroke.
+                cachedRect = canvas.getBoundingClientRect();
+
                 const coords = getCoordinates(e);
+
+                if (currentMode === 'text') {
+                    // Mousedown's default action refocuses the nearest
+                    // focusable ancestor of the click target - since canvas
+                    // isn't focusable, that's normally <body>, which yanks
+                    // focus away from the textarea the instant after we
+                    // focus it (triggering an immediate blur -> commit-empty
+                    // -> remove, all before a keystroke lands). Touch events
+                    // don't do this, which is why this only broke on desktop.
+                    if (e.cancelable) e.preventDefault();
+                    openTextEditor(pageNum, canvas, coords.rawX, coords.rawY);
+                    return;
+                }
+
+                isDrawing = true;
                 lastX = coords.x;
                 lastY = coords.y;
                 
@@ -687,7 +1136,7 @@
             function draw(e) {
                 if (!isDrawing || currentMode === 'view' || (e.touches && e.touches.length > 1)) return;
                 const coords = getCoordinates(e);
-                const currentSF = canvas.width / parseFloat(canvas.style.width);
+                const currentSF = parseFloat(canvas.dataset.sf) || 1;
 
                 if (currentMode === 'pen') {
                     ctx.beginPath();
@@ -722,19 +1171,16 @@
             canvas.addEventListener('mousemove', draw);
             canvas.addEventListener('mouseup', stop);
 
+            // Only single-finger drawing lives here. Two-finger pinch-zoom is
+            // handled once, globally, on the always-interactive pdfViewport
+            // container below — attaching it here meant it silently stopped
+            // working whenever this canvas had pointer-events:none (i.e.
+            // whenever every tool was untoggled / "view" mode).
             canvas.addEventListener('touchstart', (e) => { 
                 if (e.touches.length === 1) {
                     if (currentMode === 'view') return;
                     e.preventDefault(); 
                     start(e);
-                } else if (e.touches.length === 2) {
-                    e.preventDefault();
-                    isDrawing = false; 
-                    transformLayer.classList.add('pinching');
-                    startTouchDistance = Math.hypot(
-                        e.touches[0].clientX - e.touches[1].clientX,
-                        e.touches[0].clientY - e.touches[1].clientY
-                    );
                 }
             }, { passive: false });
             
@@ -745,36 +1191,11 @@
                         e.preventDefault(); 
                         draw(e); 
                     }
-                } else if (e.touches.length === 2) {
-                    e.preventDefault();
-                    const currentDistance = Math.hypot(
-                        e.touches[0].clientX - e.touches[1].clientX,
-                        e.touches[0].clientY - e.touches[1].clientY
-                    );
-                    
-                    if (startTouchDistance > 0) {
-                        let factor = currentDistance / startTouchDistance;
-                        currentTransformScale = Math.min(Math.max(baseTransformScale * factor, MIN_SCALE / currentScale), MAX_SCALE / currentScale);
-                        transformLayer.style.transform = `scale(${currentTransformScale})`;
-                    }
                 }
             }, { passive: false });
             
-            canvas.addEventListener('touchend', (e) => {
+            canvas.addEventListener('touchend', () => {
                 stop();
-                if (e.touches.length < 2 && transformLayer.classList.contains('pinching')) {
-                    transformLayer.classList.remove('pinching');
-                    
-                    const updatedScale = currentScale * currentTransformScale;
-                    currentScale = Math.min(Math.max(updatedScale, MIN_SCALE), MAX_SCALE);
-                    startTouchDistance = 0;
-                    
-                    if (renderTimeout) clearTimeout(renderTimeout);
-                    renderTimeout = setTimeout(() => {
-                        renderAllPages(); 
-                        setEngineMode(currentMode);
-                    }, 100);
-                }
             });
         }
 
@@ -782,17 +1203,145 @@
         transformLayer.addEventListener('mouseenter', () => { isHoveringPDF = true; });
         transformLayer.addEventListener('mouseleave', () => { isHoveringPDF = false; });
 
+        // --- PINCH ZOOM: always active, regardless of pen/eraser/view mode ---
+        // Attached to the viewport container (never pointer-events:none) rather
+        // than the per-page annotation canvas, so it keeps working even when
+        // every tool is untoggled and drawing canvases stop receiving touches.
+        //
+        // Zoom anchoring: transform-origin defaults to "0 0" (top-left), so
+        // without this, any CSS-transform zoom visually converges on the very
+        // start of the document - which looks exactly like "jumping to page
+        // 1". We capture the pinch midpoint once, in content-space
+        // coordinates (scroll offset + position relative to the viewport),
+        // and use it both as the live transform-origin and to compute where
+        // to scroll to after the final re-render, so the point under the
+        // fingers stays fixed on screen throughout.
+        let pinchAnchorContentX = 0, pinchAnchorContentY = 0;
+        let pinchAnchorRelX = 0, pinchAnchorRelY = 0;
+
+        pdfViewport.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                isDrawing = false;
+                commitOpenTextEditor();
+                transformLayer.classList.add('pinching');
+                startTouchDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+
+                const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                const rect = transformLayer.getBoundingClientRect();
+                pinchAnchorRelX = midX - rect.left;
+                pinchAnchorRelY = midY - rect.top;
+                pinchAnchorContentX = transformLayer.scrollLeft + pinchAnchorRelX;
+                pinchAnchorContentY = transformLayer.scrollTop + pinchAnchorRelY;
+
+                transformLayer.style.transformOrigin = `${pinchAnchorContentX}px ${pinchAnchorContentY}px`;
+            }
+        }, { passive: false });
+
+        pdfViewport.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const currentDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+
+                if (startTouchDistance > 0) {
+                    let factor = currentDistance / startTouchDistance;
+                    currentTransformScale = Math.min(Math.max(baseTransformScale * factor, MIN_SCALE / currentScale), getEffectiveMaxScale() / currentScale);
+                    transformLayer.style.transform = `scale(${currentTransformScale})`;
+                }
+            }
+        }, { passive: false });
+
+        pdfViewport.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2 && transformLayer.classList.contains('pinching')) {
+                transformLayer.classList.remove('pinching');
+
+                const oldScale = currentScale;
+                const updatedScale = currentScale * currentTransformScale;
+                currentScale = Math.min(Math.max(updatedScale, MIN_SCALE), getEffectiveMaxScale());
+                startTouchDistance = 0;
+
+                // Content grows/shrinks proportionally to the scale change,
+                // so scale the anchor's content-space position by the same
+                // ratio, then re-derive the scroll offset needed to keep it
+                // at the same relative position on screen.
+                const scaleRatio = currentScale / oldScale;
+                const targetScrollLeft = pinchAnchorContentX * scaleRatio - pinchAnchorRelX;
+                const targetScrollTop = pinchAnchorContentY * scaleRatio - pinchAnchorRelY;
+
+                if (renderTimeout) clearTimeout(renderTimeout);
+                renderTimeout = setTimeout(() => {
+                    renderAllPages({ left: targetScrollLeft, top: targetScrollTop });
+                }, 100);
+            }
+        });
+
+        // --- WHEEL ZOOM: instant CSS-transform feedback, debounced real render ---
+        // Previously, ctrl+wheel zoom waited 150ms with zero visual feedback
+        // before a full page rebuild. Now we apply a live CSS transform
+        // immediately (same pattern as pinch-zoom) so the zoom feels instant,
+        // then do a single crisp re-render once the user stops scrolling.
+        // Anchored at the cursor position for the same reason pinch-zoom is:
+        // transform-origin defaults to the top-left corner, which otherwise
+        // makes zooming visually snap toward the very start of the document.
+        let wheelZoomTimeout = null;
+        let pendingWheelScale = null;
+        let wheelAnchorContentX = 0, wheelAnchorContentY = 0;
+        let wheelAnchorRelX = 0, wheelAnchorRelY = 0;
+        let wheelZoomBaseScale = null; // the scale in effect when this wheel-zoom sequence started
+
         window.addEventListener('wheel', function(e) {
             if (e.ctrlKey) {
                 if (isHoveringPDF) {
-                    e.preventDefault(); 
-                    let newScale = currentScale * (1 - e.deltaY * 0.002);
-                    newScale = Math.min(Math.max(newScale, MIN_SCALE), MAX_SCALE);
+                    e.preventDefault();
 
-                    if (newScale !== currentScale) {
-                        currentScale = newScale;
-                        if(window.zoomTimeout) clearTimeout(window.zoomTimeout);
-                        window.zoomTimeout = setTimeout(() => { renderAllPages(); }, 150);
+                    const baseScale = pendingWheelScale !== null ? pendingWheelScale : currentScale;
+                    let newScale = baseScale * (1 - e.deltaY * 0.002);
+                    newScale = Math.min(Math.max(newScale, MIN_SCALE), getEffectiveMaxScale());
+
+                    if (newScale !== baseScale) {
+                        if (pendingWheelScale === null) {
+                            // Start of a new wheel-zoom sequence: capture the
+                            // cursor's content-space position as the fixed
+                            // anchor for this whole sequence.
+                            commitOpenTextEditor();
+                            wheelZoomBaseScale = currentScale;
+                            const rect = transformLayer.getBoundingClientRect();
+                            wheelAnchorRelX = e.clientX - rect.left;
+                            wheelAnchorRelY = e.clientY - rect.top;
+                            wheelAnchorContentX = transformLayer.scrollLeft + wheelAnchorRelX;
+                            wheelAnchorContentY = transformLayer.scrollTop + wheelAnchorRelY;
+                            transformLayer.style.transformOrigin = `${wheelAnchorContentX}px ${wheelAnchorContentY}px`;
+                        }
+
+                        pendingWheelScale = newScale;
+
+                        // Instant visual feedback relative to the last *rendered* scale
+                        const liveFactor = newScale / currentScale;
+                        transformLayer.classList.add('wheel-zooming');
+                        transformLayer.style.transform = `scale(${liveFactor})`;
+                        zoomInput.value = Math.round(newScale * 100);
+
+                        if (wheelZoomTimeout) clearTimeout(wheelZoomTimeout);
+                        wheelZoomTimeout = setTimeout(() => {
+                            const oldScale = wheelZoomBaseScale !== null ? wheelZoomBaseScale : currentScale;
+                            currentScale = pendingWheelScale;
+                            pendingWheelScale = null;
+                            wheelZoomBaseScale = null;
+                            transformLayer.classList.remove('wheel-zooming');
+
+                            const scaleRatio = currentScale / oldScale;
+                            const targetScrollLeft = wheelAnchorContentX * scaleRatio - wheelAnchorRelX;
+                            const targetScrollTop = wheelAnchorContentY * scaleRatio - wheelAnchorRelY;
+
+                            renderAllPages({ left: targetScrollLeft, top: targetScrollTop }); // final crisp render at the settled scale, anchored at the cursor
+                        }, 150);
                     }
                 } else {
                     e.preventDefault();
@@ -803,6 +1352,55 @@
         opacityInput.addEventListener('input', (e) => {
             opacityVal.textContent = Math.round(e.target.value * 100) + '%';
             document.querySelectorAll('.annotation-canvas').forEach(c => c.style.opacity = e.target.value);
+        });
+
+        // --- TYPE-TO-ZOOM ---
+        // Lets the user type an exact zoom percentage instead of only
+        // pinching/scrolling. Applies on Enter or when the field loses
+        // focus (not on every keystroke, so partial numbers while typing
+        // don't trigger a re-render).
+        function applyTypedZoom() {
+            const val = parseFloat(zoomInput.value);
+            if (isNaN(val)) {
+                zoomInput.value = Math.round(currentScale * 100);
+                return;
+            }
+            let newScale = val / 100;
+            newScale = Math.min(Math.max(newScale, MIN_SCALE), getEffectiveMaxScale());
+            currentScale = newScale;
+            zoomInput.value = Math.round(currentScale * 100);
+            renderAllPages(); // no anchor point for a typed value - just re-renders centered on the current scroll position
+        }
+
+        zoomInput.addEventListener('change', applyTypedZoom);
+        zoomInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                zoomInput.blur(); // triggers the 'change' handler above
+            }
+        });
+
+        // --- HELP / INSTRUCTIONS MODAL ---
+        btnHelp.addEventListener('click', () => {
+            helpModal.style.display = 'flex';
+        });
+        btnHelpClose.addEventListener('click', () => {
+            helpModal.style.display = 'none';
+        });
+        helpModal.addEventListener('click', (e) => {
+            if (e.target === helpModal) helpModal.style.display = 'none'; // click on the backdrop closes it
+        });
+        btnLangEn.addEventListener('click', () => {
+            btnLangEn.classList.add('active');
+            btnLangVi.classList.remove('active');
+            helpContentEn.style.display = 'block';
+            helpContentVi.style.display = 'none';
+        });
+        btnLangVi.addEventListener('click', () => {
+            btnLangVi.classList.add('active');
+            btnLangEn.classList.remove('active');
+            helpContentVi.style.display = 'block';
+            helpContentEn.style.display = 'none';
         });
 
         function startResize() {
@@ -826,9 +1424,34 @@
                 if (percentage > 15 && percentage < 85) {
                     leftPanel.style.width = percentage + '%';
                     leftPanel.style.height = "100%";
+                    // Clear any leftover portrait-mode height/width inline
+                    // styles so the right panel goes back to filling the
+                    // row via its default flex:1 behavior.
+                    rightPanel.style.height = "";
+                    rightPanel.style.width = "";
                 }
             }
         }
+
+        // Rotating the device (without necessarily dragging the resizer
+        // again) is enough to expose the bug: portrait mode sets inline
+        // height percentages on both panels, and portrait's CSS uses
+        // !important to override them while in that breakpoint. Landscape's
+        // CSS has no such override, so a leftover inline height (e.g. 55%)
+        // silently persists and leaves a gap - the "black bar" - below the
+        // shorter panel. This normalizes layout on every resize/orientation
+        // change so no stale portrait-only inline styles can leak through.
+        function clearStaleSizingForCurrentOrientation() {
+            const isPortraitMobile = window.innerWidth < 600 && window.innerHeight > window.innerWidth;
+            if (!isPortraitMobile) {
+                leftPanel.style.height = '';
+                rightPanel.style.height = '';
+                rightPanel.style.width = '';
+            }
+        }
+
+        window.addEventListener('resize', clearStaleSizingForCurrentOrientation);
+        window.addEventListener('orientationchange', clearStaleSizingForCurrentOrientation);
 
         function stopResize() {
             if (isDraggingResizer) {
@@ -847,7 +1470,7 @@
         }, { passive: true });
         document.addEventListener('touchend', stopResize);
 
-        // Run string sync configs on file load
+        // Run configurations on file load
         syncUIWithConfigTime();
     </script>
 </body>
